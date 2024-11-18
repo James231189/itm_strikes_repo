@@ -1,0 +1,46 @@
+import requests
+import pandas as pd
+
+def fetch_nse_data(symbol):
+    url = f"https://www.nseindia.com/api/option-chain-equity?symbol={symbol}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+
+    with requests.Session() as s:
+        s.headers.update(headers)
+        s.get("https://www.nseindia.com")
+        response = s.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            records = data['records']['data']
+            df = pd.json_normalize(records)
+            return df
+        else:
+            print("Failed to fetch data")
+            return None
+
+def find_itm_strikes(df, underlying_price):
+    call_df = df[(df['CE.strikePrice'] < underlying_price) & (df['CE.openInterest'] > 0)]
+    put_df = df[(df['PE.strikePrice'] > underlying_price) & (df['PE.openInterest'] > 0)]
+    return call_df, put_df
+
+def get_highest_oi_strikes(df):
+    highest_oi_call = df.loc[df['CE.openInterest'].idxmax()]
+    highest_oi_put = df.loc[df['PE.openInterest'].idxmax()]
+    return highest_oi_call, highest_oi_put
+
+def save_itm_strikes_to_file(symbol):
+    df = fetch_nse_data(symbol)
+    if df is not None:
+        underlying_price = df['CE.underlyingValue'].iloc[0]
+        call_itm, put_itm = find_itm_strikes(df, underlying_price)
+        highest_oi_call, highest_oi_put = get_highest_oi_strikes(df)
+
+        with open('itm_strikes.txt', 'w') as f:
+            f.write(f"{highest_oi_call['CE.strikePrice']},{highest_oi_put['PE.strikePrice']}")
+
+# Replace 'TATASTEEL' with your desired stock symbol
+save_itm_strikes_to_file("TATASTEEL")
+ 
